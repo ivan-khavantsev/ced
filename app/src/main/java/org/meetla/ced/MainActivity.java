@@ -20,6 +20,7 @@ import androidx.security.crypto.MasterKeys;
 import org.meetla.ced.databinding.ActivityMainBinding;
 import org.meetla.ced.model.Message;
 import org.meetla.ced.util.Cryptography;
+import org.meetla.ced.util.MainContainer;
 
 import java.security.KeyPair;
 import java.security.PublicKey;
@@ -28,11 +29,12 @@ import java.util.Base64;
 public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
-    private ClipboardManager clipboard;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        MainContainer.getInstance().setContext(this);
+        MainContainer.getInstance().setClipboardManager((ClipboardManager) getSystemService(CLIPBOARD_SERVICE));
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
@@ -47,23 +49,6 @@ public class MainActivity extends AppCompatActivity {
 
         EditText textEdit = findViewById(R.id.editTextTextMultiLine);
 
-        SharedPreferences preferences = null;
-        try {
-            String masterKey = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
-            preferences = EncryptedSharedPreferences.create("security", masterKey, this, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
-        } catch (Throwable t) {
-            System.out.println("ERROR ENC PREFS");
-        }
-        String mnemonic;
-        if (preferences.contains("mnemonic")) {
-            mnemonic = preferences.getString("mnemonic", null);
-        } else {
-            mnemonic = "cotton affair deliver situate pact bitter pool box cloth car soon budget equal innocent where hour toss oblige coil kick bottom face guess slush";
-            preferences.edit().putString("mnemonic", mnemonic).apply();
-        }
-
-        clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-
         Button buttonClear = findViewById(R.id.clearButton);
         buttonClear.setOnClickListener(i -> {
             textEdit.setText("");
@@ -77,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
                 byte[] publicKeyBytes = Base64.getDecoder().decode(publicKeyBase64);
                 PublicKey publicKey = Cryptography.loadPublicKey(publicKeyBytes);
                 Message message = Cryptography.encrypt(textEdit.getText().toString().getBytes(), publicKey);
-                clipboard.setText(message.encode());
+                MainContainer.getInstance().getClipboardManager().setText(message.encode());
                 Toast.makeText(getApplicationContext(), "Encrypted and Copied!", Toast.LENGTH_SHORT).show();
             } catch (Throwable t) {
                 Toast.makeText(getApplicationContext(), "Error", Toast.LENGTH_SHORT).show();
@@ -87,10 +72,10 @@ public class MainActivity extends AppCompatActivity {
         Button buttonDec = findViewById(R.id.decryptButton);
         buttonDec.setOnClickListener(i -> {
             try {
-                String clipboardData = clipboard.getText().toString();
-                if (clipboard.getText() != null) {
+                if (MainContainer.getInstance().getClipboardManager().getText() != null) {
+                    String clipboardData = MainContainer.getInstance().getClipboardManager().getText().toString();
                     Message message = Message.decode(clipboardData);
-                    KeyPair keyPair = Cryptography.loadKeyPairFromMnemonic(mnemonic);
+                    KeyPair keyPair = Cryptography.loadKeyPairFromMnemonic(MainContainer.getInstance().getMnemonic());
                     textEdit.setText(new String(Cryptography.decrypt(message, keyPair.getPrivate())));
                 } else {
                     Toast.makeText(getApplicationContext(), "Empty clipboard", Toast.LENGTH_SHORT).show();
