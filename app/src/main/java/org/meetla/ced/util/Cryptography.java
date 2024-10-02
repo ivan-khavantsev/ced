@@ -2,6 +2,11 @@ package org.meetla.ced.util;
 
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.jce.spec.IESParameterSpec;
+import org.meetla.ced.model.Message;
+import org.nightcode.bip39.Bip39;
+import org.nightcode.bip39.dictionary.Dictionary;
+import org.nightcode.bip39.dictionary.EnglishDictionary;
 
 import javax.crypto.Cipher;
 
@@ -21,6 +26,56 @@ public class Cryptography {
 
     public static KeyPair generateKeyPair() {
         return generateKeyPair(null);
+    }
+
+    public static Message encrypt(byte[] data, PublicKey publicKey){
+        try {
+            SecureRandom random = new SecureRandom();
+            byte[] nonce = new byte[16];
+            random.nextBytes(nonce);
+
+            IESParameterSpec iesParamSpec = new IESParameterSpec(null, null, 256, 256, nonce, false);
+            Cipher iesCipher = Cipher.getInstance(ECIE_SWITH_AES, SECURITY_PROVIDER);
+            iesCipher.init(Cipher.ENCRYPT_MODE, publicKey, iesParamSpec);
+
+            byte[] ciphertext = iesCipher.doFinal(GZipUtils.gzip(data));
+
+            Message message = new Message();
+            message.cipherData = ciphertext;
+            message.nonce = nonce;
+            return message;
+
+        } catch (Throwable t){
+
+        }
+        return null;
+
+    }
+
+    public static byte[] decrypt(Message message, PrivateKey privateKey){
+        try {
+            IESParameterSpec iesParamSpec2 = new IESParameterSpec(null, null, 256, 256, message.nonce, false);
+            Cipher decryptCipher = Cipher.getInstance(ECIE_SWITH_AES, SECURITY_PROVIDER);
+            decryptCipher.init(Cipher.DECRYPT_MODE, privateKey, iesParamSpec2);
+            byte[] plaintextBytes = decryptCipher.doFinal(message.cipherData);
+            return GZipUtils.gunzip(plaintextBytes);
+        } catch (Throwable t){
+
+        }
+        return null;
+    }
+
+    public static KeyPair loadKeyPairFromMnemonic(String mnemonic){
+        try {
+            Dictionary dictionary = EnglishDictionary.instance();
+            Bip39 bip39 = new Bip39(dictionary);
+            byte[] seed = bip39.createSeed(mnemonic, "");
+            KeyPair keyPair1 = Cryptography.generateKeyPair(seed);
+            return keyPair1;
+        } catch (Throwable t){
+
+        }
+        return null;
     }
 
     public static KeyPair generateKeyPair(byte[] seed) {
@@ -88,17 +143,6 @@ public class Cryptography {
         } catch (Throwable t) {
             return null;
         }
-    }
-
-    public static byte[] encrypt(byte[] data, PublicKey publicKey) {
-        try {
-            Cipher iesCipher = Cipher.getInstance(ECIE_SWITH_AES);
-            iesCipher.init(Cipher.ENCRYPT_MODE, publicKey);
-            return iesCipher.doFinal(data);
-        } catch (Throwable t) {
-            System.out.println(t.getMessage());
-        }
-        return null;
     }
 
 }

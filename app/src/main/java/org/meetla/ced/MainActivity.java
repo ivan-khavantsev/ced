@@ -1,14 +1,10 @@
 package org.meetla.ced;
 
-import static org.meetla.ced.util.Cryptography.SECURITY_PROVIDER;
-
 import android.content.ClipboardManager;
-import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -21,22 +17,15 @@ import androidx.navigation.ui.NavigationUI;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKeys;
 
-import org.bouncycastle.jce.spec.IESParameterSpec;
 import org.meetla.ced.databinding.ActivityMainBinding;
 import org.meetla.ced.model.Message;
 import org.meetla.ced.util.Cryptography;
-import org.meetla.ced.util.GZipUtils;
-import org.nightcode.bip39.Bip39;
-import org.nightcode.bip39.dictionary.Dictionary;
-import org.nightcode.bip39.dictionary.EnglishDictionary;
 
 import java.security.KeyPair;
-import java.security.SecureRandom;
-
-import javax.crypto.Cipher;
+import java.security.PublicKey;
+import java.util.Base64;
 
 public class MainActivity extends AppCompatActivity {
-    public static final String ECIESWITH_AES_CBC = "ECIESwithAES-CBC";
 
     private ActivityMainBinding binding;
     private ClipboardManager clipboard;
@@ -49,8 +38,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
 
         BottomNavigationView navView = findViewById(R.id.nav_view);
-        // Passing each menu ID as a set of Ids because each
-        // menu should be considered as top level destinations.
         AppBarConfiguration appBarConfiguration = new AppBarConfiguration.Builder(
                 R.id.navigation_home, R.id.navigation_dashboard, R.id.navigation_notifications)
                 .build();
@@ -61,14 +48,14 @@ public class MainActivity extends AppCompatActivity {
         EditText textEdit = findViewById(R.id.editTextTextMultiLine);
 
         SharedPreferences preferences = null;
-        try{
+        try {
             String masterKey = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
             preferences = EncryptedSharedPreferences.create("security", masterKey, this, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
-        } catch (Throwable t){
+        } catch (Throwable t) {
             System.out.println("ERROR ENC PREFS");
         }
         String mnemonic;
-        if(preferences.contains("mnemonic")){
+        if (preferences.contains("mnemonic")) {
             mnemonic = preferences.getString("mnemonic", null);
         } else {
             mnemonic = "cotton affair deliver situate pact bitter pool box cloth car soon budget equal innocent where hour toss oblige coil kick bottom face guess slush";
@@ -85,58 +72,35 @@ public class MainActivity extends AppCompatActivity {
         Button buttonEnc = findViewById(R.id.button2);
         buttonEnc.setOnClickListener(i -> {
             try {
-                Dictionary dictionary = EnglishDictionary.instance();
-                Bip39 bip39 = new Bip39(dictionary);
-                byte[] seed = bip39.createSeed(mnemonic, "");
-                KeyPair keyPair1 = Cryptography.generateKeyPair(seed);
-                SecureRandom random = new SecureRandom();
-                byte[] nonce = new byte[16];
-                random.nextBytes(nonce);
-
-                IESParameterSpec iesParamSpec = new IESParameterSpec(null, null, 256, 256, nonce, false);
-                Cipher iesCipher = Cipher.getInstance(ECIESWITH_AES_CBC, SECURITY_PROVIDER);
-                iesCipher.init(Cipher.ENCRYPT_MODE, keyPair1.getPublic(), iesParamSpec);
-
-                byte[] ciphertext = iesCipher.doFinal(GZipUtils.gzip(textEdit.getText().toString().getBytes()));
-                Message message = new Message();
-                message.cipherData = ciphertext;
-                message.nonce = nonce;
-
+                //String publicKeyBase64 = Base64.getEncoder().encodeToString(keyPair1.getPublic().getEncoded());
+                String publicKeyBase64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4tODL6kkdfcB4ZbpaeC3h0e4+C/LqboPM6W9M2LpKg+Va8NCfMoBPBbvd0LMdfW2BbiR7TkG7ZntZ1pfmMExlw==";
+                byte[] publicKeyBytes = Base64.getDecoder().decode(publicKeyBase64);
+                PublicKey publicKey = Cryptography.loadPublicKey(publicKeyBytes);
+                Message message = Cryptography.encrypt(textEdit.getText().toString().getBytes(), publicKey);
                 clipboard.setText(message.encode());
                 Toast.makeText(getApplicationContext(), "Encrypted and Copied!", Toast.LENGTH_SHORT).show();
-            } catch (Throwable t){
+            } catch (Throwable t) {
                 Toast.makeText(getApplicationContext(), "Error", Toast.LENGTH_SHORT).show();
             }
         });
 
-
         Button buttonDec = findViewById(R.id.button);
         buttonDec.setOnClickListener(i -> {
             try {
-                // NULLPOINTER
                 String clipboardData = clipboard.getText().toString();
-                Dictionary dictionary = EnglishDictionary.instance();
-                Bip39 bip39 = new Bip39(dictionary);
-                byte[] seed = bip39.createSeed(mnemonic, "");
-                KeyPair keyPair1 = Cryptography.generateKeyPair(seed);
-
-                Message message = Message.decode(clipboardData);
-
-                IESParameterSpec iesParamSpec2 = new IESParameterSpec(null, null, 256, 256, message.nonce, false);
-                Cipher decryptCipher = Cipher.getInstance(ECIESWITH_AES_CBC, SECURITY_PROVIDER);
-                decryptCipher.init(Cipher.DECRYPT_MODE, keyPair1.getPrivate(), iesParamSpec2);
-                byte[] plaintextBytes = decryptCipher.doFinal(message.cipherData);
-                String decryptedText = new String(GZipUtils.gunzip(plaintextBytes));
-
-                textEdit.setText(decryptedText);
+                if (clipboard.getText() != null) {
+                    Message message = Message.decode(clipboardData);
+                    KeyPair keyPair = Cryptography.loadKeyPairFromMnemonic(mnemonic);
+                    textEdit.setText(new String(Cryptography.decrypt(message, keyPair.getPrivate())));
+                } else {
+                    Toast.makeText(getApplicationContext(), "Empty clipboard", Toast.LENGTH_SHORT).show();
+                }
                 Toast.makeText(getApplicationContext(), "Decrypted", Toast.LENGTH_SHORT).show();
             } catch (Throwable t) {
                 t.printStackTrace();
                 Toast.makeText(getApplicationContext(), "Error", Toast.LENGTH_SHORT).show();
             }
         });
-
-
     }
 
 }
