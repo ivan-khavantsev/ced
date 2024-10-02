@@ -19,23 +19,19 @@ import androidx.navigation.Navigation;
 import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 import androidx.security.crypto.EncryptedSharedPreferences;
+import androidx.security.crypto.MasterKeys;
 
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jce.spec.IESParameterSpec;
 import org.meetla.ced.databinding.ActivityMainBinding;
 import org.meetla.ced.model.Message;
 import org.meetla.ced.util.Cryptography;
 import org.meetla.ced.util.GZipUtils;
-import org.meetla.ced.util.JsonUtils;
 import org.nightcode.bip39.Bip39;
 import org.nightcode.bip39.dictionary.Dictionary;
 import org.nightcode.bip39.dictionary.EnglishDictionary;
 
 import java.security.KeyPair;
-import java.security.Provider;
 import java.security.SecureRandom;
-import java.security.Security;
-import java.util.Base64;
 
 import javax.crypto.Cipher;
 
@@ -64,7 +60,13 @@ public class MainActivity extends AppCompatActivity {
 
         EditText textEdit = findViewById(R.id.editTextTextMultiLine);
 
-        SharedPreferences preferences = this.getSharedPreferences("security", Context.MODE_PRIVATE);
+        SharedPreferences preferences = null;
+        try{
+            String masterKey = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
+            preferences = EncryptedSharedPreferences.create("security", masterKey, this, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
+        } catch (Throwable t){
+            System.out.println("ERROR ENC PREFS");
+        }
         String mnemonic;
         if(preferences.contains("mnemonic")){
             mnemonic = preferences.getString("mnemonic", null);
@@ -83,9 +85,6 @@ public class MainActivity extends AppCompatActivity {
         Button buttonEnc = findViewById(R.id.button2);
         buttonEnc.setOnClickListener(i -> {
             try {
-
-
-
                 Dictionary dictionary = EnglishDictionary.instance();
                 Bip39 bip39 = new Bip39(dictionary);
                 byte[] seed = bip39.createSeed(mnemonic, "");
@@ -104,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
                 message.nonce = nonce;
 
                 clipboard.setText(message.encode());
-                Toast.makeText(getApplicationContext(), "Encrypted", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getApplicationContext(), "Encrypted and Copied!", Toast.LENGTH_SHORT).show();
             } catch (Throwable t){
                 Toast.makeText(getApplicationContext(), "Error", Toast.LENGTH_SHORT).show();
             }
