@@ -69,7 +69,7 @@ public class MainActivity extends AppCompatActivity {
             textEdit.setText("");
         });
 
-        Button buttonEnc = findViewById(R.id.button2);
+        Button buttonEnc = findViewById(R.id.encryptButton);
         buttonEnc.setOnClickListener(i -> {
             try {
                 //String publicKeyBase64 = Base64.getEncoder().encodeToString(keyPair1.getPublic().getEncoded());
@@ -84,7 +84,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        Button buttonDec = findViewById(R.id.button);
+        Button buttonDec = findViewById(R.id.decryptButton);
         buttonDec.setOnClickListener(i -> {
             try {
                 String clipboardData = clipboard.getText().toString();
